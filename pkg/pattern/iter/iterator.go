@@ -1,9 +1,10 @@
 package iter
 
 import (
+	"github.com/prometheus/prometheus/model/labels"
+
 	iter "github.com/grafana/loki/v3/pkg/iter/v2"
 	"github.com/grafana/loki/v3/pkg/logproto"
-	"github.com/prometheus/prometheus/model/labels"
 )
 
 type Iterator interface {

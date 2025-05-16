@@ -422,7 +422,8 @@ func TestInstancePushAggregateMetrics(t *testing.T) {
 	t.Run("downsamples patterns", func(t *testing.T) {
 		now := time.Now()
 		inst, mockWriter := setup(now)
-		inst.SamplePatterns(context.Background(), now.Add(-5*time.Minute), now)
+		err := inst.SamplePatterns(context.Background(), now.Add(-5*time.Minute), now)
+		require.NoError(t, err)
 
 		mockWriter.AssertCalled(
 			t,

@@ -367,6 +367,9 @@ func (i *instance) SampleMetrics(now model.Time) {
 
 func (i *instance) SamplePatterns(ctx context.Context, start, end time.Time) error {
 	its, err := i.StreamPatternsIterator(ctx, start, end, drain.TimeResolution)
+	if err != nil {
+		return err
+	}
 
 	for _, it := range its {
 		var respSize int
@@ -397,7 +400,7 @@ func (i *instance) SamplePatterns(ctx context.Context, start, end time.Time) err
 		}
 	}
 
-	return err
+	return nil
 }
 
 func (i *instance) writeAggregatedMetrics(

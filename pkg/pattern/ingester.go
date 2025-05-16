@@ -484,7 +484,13 @@ func (i *Ingester) samplePatterns(ctx context.Context, start, end time.Time) {
 
 	for _, instance := range instances {
 		if i.limits.MetricAggregationEnabled(instance.instanceID) {
-			instance.SamplePatterns(ctx, start, end)
+			err := instance.SamplePatterns(ctx, start, end)
+			if err != nil {
+				level.Error(i.logger).Log(
+					"msg", "failed to sample patterns",
+					"err", err,
+				)
+			}
 		}
 	}
 }
