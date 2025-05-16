@@ -75,7 +75,7 @@ func TestSweepInstance(t *testing.T) {
 
 	inst, _ := ing.getInstanceByID("foo")
 
-	it, err := inst.Iterator(ctx, &logproto.QueryPatternsRequest{
+	it, err := inst.QueryIterator(ctx, &logproto.QueryPatternsRequest{
 		Query: `{test="test"}`,
 		Start: time.Unix(0, 0),
 		End:   time.Unix(0, math.MaxInt64),
@@ -85,7 +85,7 @@ func TestSweepInstance(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len(res.Series))
 	ing.sweepUsers(true, true)
-	it, err = inst.Iterator(ctx, &logproto.QueryPatternsRequest{
+	it, err = inst.QueryIterator(ctx, &logproto.QueryPatternsRequest{
 		Query: `{test="test"}`,
 		Start: time.Unix(0, 0),
 		End:   time.Unix(0, math.MaxInt64),

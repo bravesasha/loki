@@ -168,6 +168,37 @@ func (ii *BitPrefixInvertedIndex) Lookup(matchers []*labels.Matcher, shard *logq
 	return result, nil
 }
 
+func (ii *BitPrefixInvertedIndex) All(shard *logql.Shard) ([]model.Fingerprint, error) {
+	if err := ii.validateShard(shard); err != nil {
+		return nil, err
+	}
+
+	var result []model.Fingerprint
+	shards, filter := ii.getShards(shard)
+
+	for i := range shards {
+		fps := shards[i].allFPs()
+		result = append(result, fps...)
+	}
+
+	// Because bit prefix order is also ascending order,
+	// the merged fingerprints from ascending shards are also in order.
+	if filter {
+		minFP, maxFP := shard.GetFromThrough()
+		minIdx := sort.Search(len(result), func(i int) bool {
+			return result[i] >= minFP
+		})
+
+		maxIdx := sort.Search(len(result), func(i int) bool {
+			return result[i] >= maxFP
+		})
+
+		result = result[minIdx:maxIdx]
+	}
+
+	return result, nil
+}
+
 // LabelNames returns all label names.
 func (ii *BitPrefixInvertedIndex) LabelNames(shard *logql.Shard) ([]string, error) {
 	if err := ii.validateShard(shard); err != nil {

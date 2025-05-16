@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/grafana/dskit/httpgrpc"
@@ -157,8 +158,8 @@ func (i *instance) isOwnedStream(ingesterID string, stream string) (bool, error)
 	return false, nil
 }
 
-// Iterator returns an iterator of pattern samples matching the given query patterns request.
-func (i *instance) Iterator(ctx context.Context, req *logproto.QueryPatternsRequest) (iter.Iterator, error) {
+// QueryIterator returns an iterator of pattern samples matching the given query patterns request.
+func (i *instance) QueryIterator(ctx context.Context, req *logproto.QueryPatternsRequest) (iter.Iterator, error) {
 	matchers, err := syntax.ParseMatchers(req.Query, true)
 	if err != nil {
 		return nil, httpgrpc.Errorf(http.StatusBadRequest, "%s", err.Error())
@@ -184,6 +185,31 @@ func (i *instance) Iterator(ctx context.Context, req *logproto.QueryPatternsRequ
 	return iter.NewMerge(iters...), nil
 }
 
+// StreamPatternsIterator returns a collection of pattern iterators, one for each stream
+func (i *instance) StreamPatternsIterator(ctx context.Context, start, end time.Time, step model.Time) ([]iter.StreamPatterns, error) {
+	from, through := util.RoundToMilliseconds(start, end)
+	if step < drain.TimeResolution {
+		step = drain.TimeResolution
+	}
+
+	its := []iter.StreamPatterns{}
+	err := i.forAllStreams(func(s *stream) error {
+		currIt, err := s.Iterator(ctx, from, through, step)
+		if err != nil {
+			return err
+		}
+
+		its = append(its, iter.NewStreamPatternsIterator(s.labels, currIt))
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return its, nil
+}
+
 // forMatchingStreams will execute a function for each stream that matches the given matchers.
 func (i *instance) forMatchingStreams(
 	matchers []*labels.Matcher,
@@ -207,6 +233,30 @@ outer:
 			if !filter.Matches(stream.labels.Get(filter.Name)) {
 				continue outer
 			}
+		}
+		err := fn(stream)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// forAllStreams will execute a function for all streams in the instance
+func (i *instance) forAllStreams(
+	fn func(*stream) error,
+) error {
+	ids, err := i.index.All(nil)
+	if err != nil {
+		return err
+	}
+
+	for _, streamID := range ids {
+		stream, ok := i.streams.LoadByFP(streamID)
+		if !ok {
+			// If a stream is missing here, it has already been flushed
+			// and is supposed to be picked up from storage by querier
+			continue
 		}
 		err := fn(stream)
 		if err != nil {
@@ -293,7 +343,7 @@ func (i *instance) Observe(ctx context.Context, stream string, entries []logprot
 	}
 }
 
-func (i *instance) Downsample(now model.Time) {
+func (i *instance) SampleMetrics(now model.Time) {
 	i.aggMetricsLock.Lock()
 	defer func() {
 		i.aggMetricsByStreamAndLevel = make(map[string]map[string]*aggregatedMetrics)
@@ -313,6 +363,41 @@ func (i *instance) Downsample(now model.Time) {
 			}
 		}
 	}
+}
+
+func (i *instance) SamplePatterns(ctx context.Context, start, end time.Time) error {
+	its, err := i.StreamPatternsIterator(ctx, start, end, drain.TimeResolution)
+
+	for _, it := range its {
+		var respSize int
+		series := map[string]int64{}
+
+		for it.Next() {
+			respSize++
+			pattern, sample := it.Pattern(), it.At()
+			if curr, ok := series[pattern]; ok {
+				series[pattern] = curr + sample.GetValue()
+			} else {
+				series[pattern] = sample.GetValue()
+			}
+
+			if respSize >= readBatchSize {
+				for pattern, count := range series {
+					i.writePattern(end, it.Labels(), pattern, count)
+				}
+
+				series = map[string]int64{}
+				respSize = 0
+			}
+		}
+
+		for pattern, count := range series {
+			i.writePattern(end, it.Labels(), pattern, count)
+			series[pattern] = 0
+		}
+	}
+
+	return err
 }
 
 func (i *instance) writeAggregatedMetrics(
@@ -337,11 +422,43 @@ func (i *instance) writeAggregatedMetrics(
 	if i.writer != nil {
 		i.writer.WriteEntry(
 			now.Time(),
-			aggregation.AggregatedMetricEntry(now, totalBytes, totalCount, service, streamLbls),
+			aggregation.AggregatedMetricEntry(now, totalBytes, totalCount, streamLbls),
 			newLbls,
 			sturcturedMetadata,
 		)
 
-		i.metrics.samples.WithLabelValues(service).Inc()
+		i.metrics.metricSamples.WithLabelValues(service).Inc()
+	}
+}
+
+func (i *instance) writePattern(
+	now time.Time,
+	streamLbls labels.Labels,
+	pattern string,
+	count int64,
+) {
+	service := streamLbls.Get(push.LabelServiceName)
+	if service == "" {
+		service = push.ServiceUnknown
+	}
+
+	newLbls := labels.Labels{
+		labels.Label{Name: constants.AggregatedMetricLabel, Value: service},
+	}
+
+	sturcturedMetadata := []logproto.LabelAdapter{
+		//TODO: add level to patterns
+		// {Name: constants.LevelLabel, Value: level},
+	}
+
+	if i.writer != nil {
+		i.writer.WriteEntry(
+			now,
+			aggregation.PatternEntry(now, count, pattern, streamLbls),
+			newLbls,
+			sturcturedMetadata,
+		)
+
+		i.metrics.patternSamples.WithLabelValues(service).Inc()
 	}
 }

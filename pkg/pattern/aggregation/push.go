@@ -21,7 +21,6 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 
-	"github.com/grafana/loki/v3/pkg/loghttp/push"
 	"github.com/grafana/loki/v3/pkg/logproto"
 	"github.com/grafana/loki/v3/pkg/logql/syntax"
 	"github.com/grafana/loki/v3/pkg/util"
@@ -377,16 +376,34 @@ func (p *Push) send(ctx context.Context, payload []byte) (int, error) {
 func AggregatedMetricEntry(
 	ts model.Time,
 	totalBytes, totalCount uint64,
-	service string,
 	lbls labels.Labels,
 ) string {
 	byteString := util.HumanizeBytes(totalBytes)
 	base := fmt.Sprintf(
-		"ts=%d bytes=%s count=%d %s=\"%s\"",
+		"metric=true ts=%d bytes=%s count=%d",
 		ts.UnixNano(),
 		byteString,
 		totalCount,
-		push.LabelServiceName, service,
+	)
+
+	for _, l := range lbls {
+		base += fmt.Sprintf(" %s=\"%s\"", l.Name, l.Value)
+	}
+
+	return base
+}
+
+func PatternEntry(
+	ts time.Time,
+	count int64,
+	pattern string,
+	lbls labels.Labels,
+) string {
+	base := fmt.Sprintf(
+		`pattern=true ts=%d pattern="%s" count=%d`,
+		ts.UnixNano(),
+		pattern,
+		count,
 	)
 
 	for _, l := range lbls {

@@ -3,12 +3,19 @@ package iter
 import (
 	iter "github.com/grafana/loki/v3/pkg/iter/v2"
 	"github.com/grafana/loki/v3/pkg/logproto"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 type Iterator interface {
 	iter.CloseIterator[logproto.PatternSample]
 
 	Pattern() string
+}
+
+type StreamPatterns interface {
+	Iterator
+
+	Labels() labels.Labels
 }
 
 func NewSlice(pattern string, s []logproto.PatternSample) *PatternIter {
@@ -34,7 +41,7 @@ func (s *PatternIter) Pattern() string {
 	return s.pattern
 }
 
-type nonOverlappingIterator struct {
+type nonOverlappingPatternIterator struct {
 	iterators []Iterator
 	curr      Iterator
 	pattern   string
@@ -42,13 +49,13 @@ type nonOverlappingIterator struct {
 
 // NewNonOverlappingIterator gives a chained iterator over a list of iterators.
 func NewNonOverlappingIterator(pattern string, iterators []Iterator) Iterator {
-	return &nonOverlappingIterator{
+	return &nonOverlappingPatternIterator{
 		iterators: iterators,
 		pattern:   pattern,
 	}
 }
 
-func (i *nonOverlappingIterator) Next() bool {
+func (i *nonOverlappingPatternIterator) Next() bool {
 	for i.curr == nil || !i.curr.Next() {
 		if len(i.iterators) == 0 {
 			if i.curr != nil {
@@ -65,22 +72,22 @@ func (i *nonOverlappingIterator) Next() bool {
 	return true
 }
 
-func (i *nonOverlappingIterator) At() logproto.PatternSample {
+func (i *nonOverlappingPatternIterator) At() logproto.PatternSample {
 	return i.curr.At()
 }
 
-func (i *nonOverlappingIterator) Pattern() string {
+func (i *nonOverlappingPatternIterator) Pattern() string {
 	return i.pattern
 }
 
-func (i *nonOverlappingIterator) Err() error {
+func (i *nonOverlappingPatternIterator) Err() error {
 	if i.curr != nil {
 		return i.curr.Err()
 	}
 	return nil
 }
 
-func (i *nonOverlappingIterator) Close() error {
+func (i *nonOverlappingPatternIterator) Close() error {
 	if i.curr != nil {
 		i.curr.Close()
 	}
@@ -89,4 +96,21 @@ func (i *nonOverlappingIterator) Close() error {
 	}
 	i.iterators = nil
 	return nil
+}
+
+type streamPatternsIterator struct {
+	Iterator
+	labels labels.Labels
+}
+
+// NewStreamPatternsIterator gives a chained iterator over a list of iterators.
+func NewStreamPatternsIterator(lbls labels.Labels, it Iterator) StreamPatterns {
+	return &streamPatternsIterator{
+		Iterator: it,
+		labels:   lbls,
+	}
+}
+
+func (i *streamPatternsIterator) Labels() labels.Labels {
+	return i.labels
 }
