@@ -380,7 +380,7 @@ func AggregatedMetricEntry(
 ) string {
 	byteString := util.HumanizeBytes(totalBytes)
 	base := fmt.Sprintf(
-		"metric=true ts=%d bytes=%s count=%d",
+		"ts=%d bytes=%s count=%d",
 		ts.UnixNano(),
 		byteString,
 		totalCount,
@@ -400,10 +400,10 @@ func PatternEntry(
 	lbls labels.Labels,
 ) string {
 	base := fmt.Sprintf(
-		`pattern=true ts=%d pattern="%s" count=%d`,
+		`ts=%d count=%d detected_pattern="%s"`,
 		ts.UnixNano(),
-		pattern,
 		count,
+		url.QueryEscape(pattern),
 	)
 
 	for _, l := range lbls {

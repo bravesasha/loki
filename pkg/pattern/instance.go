@@ -420,6 +420,7 @@ func (i *instance) writeAggregatedMetrics(
 
 	sturcturedMetadata := []logproto.LabelAdapter{
 		{Name: constants.LevelLabel, Value: level},
+		{Name: "is_metric", Value: "true"},
 	}
 
 	if i.writer != nil {
@@ -452,6 +453,7 @@ func (i *instance) writePattern(
 	sturcturedMetadata := []logproto.LabelAdapter{
 		//TODO: add level to patterns
 		// {Name: constants.LevelLabel, Value: level},
+		{Name: "is_pattern", Value: "true"},
 	}
 
 	if i.writer != nil {
