@@ -28,7 +28,6 @@ var (
 // is the Metastore.
 type Catalog interface {
 	ResolveDataObj(Expression) ([]DataObjLocation, [][]int64, error)
-	ResolveDataObjWithShard(Expression, int) ([]DataObjLocation, [][]int64, error)
 }
 
 // Context is the default implementation of [Catalog].
@@ -52,11 +51,6 @@ func NewContext(ctx context.Context, ms metastore.Metastore, from, through time.
 // [Expression]. The expression is required to be a (tree of) [BinaryExpression]
 // with a [ColumnExpression] on the left and a [LiteralExpression] on the right.
 func (c *Context) ResolveDataObj(selector Expression) ([]DataObjLocation, [][]int64, error) {
-	return c.ResolveDataObjWithShard(selector, -1) // shard -1 indicates that we want the full dataset, not a specific shard of it
-}
-
-func (c *Context) ResolveDataObjWithShard(selector Expression, shard int) ([]DataObjLocation, [][]int64, error) {
-
 	if c.metastore == nil {
 		return nil, nil, errors.New("no metastore to resolve objects")
 	}
