@@ -48,8 +48,8 @@ func (s *IngestLimits) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			// Calculate size only within the rate window
 			for _, bucket := range stream.RateBuckets {
-				if bucket.Timestamp >= rateWindowCutoff {
-					totalSize += bucket.Size
+				if bucket.timestamp >= rateWindowCutoff {
+					totalSize += bucket.size
 				}
 			}
 		}
