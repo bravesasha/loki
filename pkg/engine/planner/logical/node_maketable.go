@@ -17,6 +17,8 @@ type MakeTable struct {
 	// It is invalid for Selector to include a [ColumnRef] that is not
 	// [ColumnTypeBuiltin] or [ColumnTypeLabel].
 	Selector Value
+
+	Shard Value
 }
 
 var (
@@ -34,7 +36,7 @@ func (t *MakeTable) Name() string {
 
 // String returns the disassembled SSA form of the MakeTable instruction.
 func (t *MakeTable) String() string {
-	return fmt.Sprintf("MAKETABLE [selector=%s]", t.Selector.Name())
+	return fmt.Sprintf("MAKETABLE [selector=%s, shard=%s]", t.Selector.Name(), t.Shard.Name())
 }
 
 // Schema returns the schema of the table.
